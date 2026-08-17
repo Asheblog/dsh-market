@@ -11,6 +11,18 @@ import { Readable } from 'node:stream'
 const childProcess = vi.hoisted(() => ({ spawn: vi.fn() }))
 vi.mock('node:child_process', () => ({ spawn: childProcess.spawn }))
 
+/**
+ * The command a spawn call really represents. On Windows the market routes
+ * shim-able tools through `cmd.exe /d /s /c "<command line>"` (#80), so the
+ * `file` argument is COMSPEC and the real command lives in the last arg —
+ * matching on `file` alone silently misses every case there.
+ */
+function commandOf(file: string, args: readonly string[]): string {
+  if (!/cmd(\.exe)?$/i.test(file)) return [file, ...args].join(' ')
+  const line = String(args[args.length - 1] ?? '')
+  return line.replace(/^"|"$/g, '')
+}
+
 /** One fake child: exits with `code` after emitting `stdout`. */
 function fakeChild(code: number, stdout = ''): EventEmitter & Record<string, unknown> {
   const child = new EventEmitter() as EventEmitter & Record<string, unknown>
@@ -38,10 +50,11 @@ describe('provisionPnpm (#149)', () => {
     const calls: string[][] = []
     const globalBin = process.platform === 'win32' ? 'C:\\npm-prefix' : '/opt/custom-prefix'
     childProcess.spawn.mockImplementation((file: string, args: string[], options: { env?: Record<string, string> }) => {
-      calls.push([file, ...args])
-      if (file === 'corepack') return fakeChild(0)
-      if (file === 'npm' && args[0] === 'install') return fakeChild(0)
-      if (file === 'npm' && args[0] === 'prefix') return fakeChild(0, `${globalBin}\n`)
+      const command = commandOf(file, args)
+      calls.push([command])
+      if (command.startsWith('corepack')) return fakeChild(0)
+      if (command.startsWith('npm install')) return fakeChild(0)
+      if (command.startsWith('npm prefix')) return fakeChild(0, `${globalBin}\n`)
       // pnpm runs only once the discovered bin dir is on the spawn PATH.
       const path = options.env?.PATH ?? ''
       return fakeChild(path.includes(globalBin) ? 0 : 1)
@@ -50,14 +63,15 @@ describe('provisionPnpm (#149)', () => {
     const { provisionPnpm } = await import('../src/dsh-cli.ts')
     await expect(provisionPnpm()).resolves.toEqual({ ok: true })
     // It asked npm where it installed, rather than giving up.
-    expect(calls.some(call => call.join(' ') === 'npm prefix -g')).toBe(true)
+    expect(calls.some(call => call[0].startsWith('npm prefix'))).toBe(true)
   })
 
   it('still reports failure — with a hint — when pnpm genuinely cannot run', async () => {
     childProcess.spawn.mockImplementation((file: string, args: string[]) => {
-      if (file === 'corepack') return fakeChild(1, 'spawn corepack ENOENT')
-      if (file === 'npm' && args[0] === 'install') return fakeChild(1, 'spawn npm ENOENT')
-      if (file === 'npm' && args[0] === 'prefix') return fakeChild(1)
+      const command = commandOf(file, args)
+      if (command.startsWith('corepack')) return fakeChild(1, 'spawn corepack ENOENT')
+      if (command.startsWith('npm install')) return fakeChild(1, 'spawn npm ENOENT')
+      if (command.startsWith('npm prefix')) return fakeChild(1)
       return fakeChild(1)
     })
 

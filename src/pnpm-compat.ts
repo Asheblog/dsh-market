@@ -228,7 +228,7 @@ export function classifyPnpmFailure(output: string): PnpmFailure | null {
       message: `profile 的 pnpm-lock.yaml 里有 tarball 依赖${zh}缺少 integrity，pnpm 因此拒绝这个 profile 里的所有安装和卸载——包括卸载它自己，所以装不回来也删不掉。这种条目通常是旧版市场留下的：它把 GitHub 插件写成了带镜像前缀的 tarball 地址，pnpm 认不出那是 GitHub，就要求一个它自己从不为 GitHub 源写入的校验值。新版市场改为交给 pnpm 原生的 GitHub 地址，不会再产生这种条目（#385）。请在 pnpm-lock.yaml 里删掉上面点名的那条依赖记录后重试，市场会用当前方式把它重新装回来；不要删整个 pnpm-lock.yaml，那会让其余插件全部重新解析版本。市场不会自动为未经验证的字节生成校验值 / a tarball dependency${en} in this profile's pnpm-lock.yaml has no integrity, so pnpm refuses every install and uninstall in this profile — including uninstalling that dependency itself, so it can be neither repaired nor removed. Entries like this usually come from an older market version, which installed GitHub plugins from a mirror-prefixed tarball URL: pnpm cannot tell that is GitHub, so it demands a checksum it never writes for GitHub sources. Current versions hand pnpm its own native GitHub target instead and no longer produce such entries (#385). Delete the named dependency's entry from pnpm-lock.yaml and retry — the market will reinstall it the current way. Do not delete the whole pnpm-lock.yaml; that re-resolves the versions of every other plugin too. The market will not generate a checksum for unverified bytes automatically`,
     }
   }
-  // #…: pnpm 11's supply-chain check compares every lockfile tarball URL
+  // #455 by @Asheblog: pnpm 11's supply-chain check compares every lockfile tarball URL
   // against the registry's published metadata. A lockfile generated against
   // registry.npmjs.org fails wholesale when the profile resolves a mirror
   // registry (npmmirror), because the mirror's metadata names its own
@@ -324,7 +324,7 @@ export function classifyPnpmFailure(output: string): PnpmFailure | null {
       message: '这个 git 插件需要在安装时执行构建脚本，被 pnpm 默认拦截。点击「允许构建脚本并重试」放行后重试即可 / this git-hosted plugin needs to run its build script at install time, which pnpm blocks by default — click "Allow build scripts and retry" to approve and retry',
     }
   }
-  // #…: a git-hosted package with a prepare/prepack script failed its own
+  // #455 by @Asheblog: a git-hosted package with a prepare/prepack script failed its own
   // build. pnpm runs `pnpm install` inside the fetched repository and
   // rethrows the inner failure as ERR_PNPM_PREPARE_PACKAGE with only a
   // one-line summary — the inner diagnostics (which package, which registry)
